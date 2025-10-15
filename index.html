@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pemindai Barcode Ekspedisi (Code 128)</title>
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%2210%22 height=%22100%22 x=%220%22 y=%220%22 fill=%22black%22/><rect width=%225%22 height=%22100%22 x=%2215%22 y=%220%22 fill=%22black%22/><rect width=%2210%22 height=%22100%22 x=%2225%22 y=%220%22 fill=%22black%22/><rect width=%222%22 height=%22100%22 x=%2240%22 y=%220%22 fill=%22black%22/><rect width=%228%22 height=%22100%22 x=%2245%22 y=%220%22 fill=%22black%22/><rect width=%2215%22 height=%22100%22 x=%2258%22 y=%220%22 fill=%22black%22/><rect width=%225%22 height=%22100%22 x=%2278%22 y=%220%22 fill=%22black%22/><rect width=%2210%22 height=%22100%22 x=%2288%22 y=%220%22 fill=%22black%22/></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <!-- Library untuk generate barcode di popup -->
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
@@ -31,16 +35,14 @@
         #scanned-list::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 6px; }
         #scanned-list::-webkit-scrollbar-thumb:hover { background: #64748b; }
         
-        /* Modal Styles */
-        #confirmation-modal {
-            transition: opacity 0.2s ease-in-out;
-        }
-        .modal-content {
-            transition: transform 0.2s ease-in-out;
-        }
+        #confirmation-modal { transition: opacity 0.2s ease-in-out; }
+        .modal-content { transition: transform 0.2s ease-in-out; }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 flex flex-col items-center justify-center min-h-screen p-4 md:p-6">
+
+    <!-- Elemen Audio untuk Suara Pindai -->
+    <audio id="scan-sound" src="scan.mp3" preload="auto"></audio>
 
     <div class="w-full max-w-2xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col">
         <!-- Header -->
@@ -63,8 +65,8 @@
 
             <!-- Camera Controls -->
             <div class="flex flex-col sm:flex-row items-center justify-center gap-3 mb-4 max-w-md mx-auto">
-                <button id="toggle-camera-btn" class="w-full sm:w-auto bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow flex items-center justify-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>
+                <button id="toggle-camera-btn" class="w-full sm:w-auto bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow flex items-center justify-center gap-2 disabled:bg-slate-400 disabled:cursor-not-allowed">
+                    <i class="fas fa-camera"></i>
                     <span id="toggle-camera-text">Nyalakan Kamera</span>
                 </button>
                 <select id="camera-select" class="w-full sm:w-auto border border-slate-300 rounded-lg px-3 py-2 bg-white shadow-sm disabled:bg-slate-100 disabled:cursor-not-allowed">
@@ -80,11 +82,11 @@
                 </div>
                 <div class="flex items-center gap-2">
                     <button id="copy-button" disabled class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow flex items-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M19 21H8V7h11m-2-2H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2m-8-2H5a2 2 0 0 0-2 2v14h2V3h10V1Z"/></svg>
+                        <i class="far fa-copy"></i>
                         <span id="copy-button-text">Salin Semua</span>
                     </button>
                     <button id="clear-button" disabled class="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors shadow flex items-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M9 3v1H4v2h1v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6h1V4h-5V3H9M7 6h10v13H7V6m2 2v9h2V8H9m4 0v9h2V8h-2Z"/></svg>
+                        <i class="fas fa-trash-alt"></i>
                         <span>Hapus</span>
                     </button>
                 </div>
@@ -121,6 +123,7 @@
     import { BrowserMultiFormatReader, NotFoundException, ChecksumException, FormatException, BarcodeFormat } from "https://cdn.skypack.dev/@zxing/library@0.21.0";
 
     (function() {
+        // --- DOM Element References ---
         const video = document.getElementById('video');
         const scannedList = document.getElementById('scanned-list');
         const scanCount = document.getElementById('scan-count');
@@ -133,6 +136,7 @@
         const toggleCameraText = document.getElementById('toggle-camera-text');
         const cameraSelect = document.getElementById('camera-select');
         const laser = document.getElementById('laser');
+        const scanSound = document.getElementById('scan-sound');
 
         // Modal elements
         const modal = document.getElementById('confirmation-modal');
@@ -142,6 +146,7 @@
         const modalAddBtn = document.getElementById('modal-add-btn');
         const modalCancelBtn = document.getElementById('modal-cancel-btn');
 
+        // --- State Management ---
         let scannedCodes = [];
         let isCameraOn = false;
         let currentScannedCode = null;
@@ -153,22 +158,10 @@
             delayBetweenScanSuccess: 500
         });
 
-        // --- Audio Context for Beep Sound ---
-        let audioCtx;
+        // --- Audio Function ---
         function playBeep() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            
-            oscillator.type = 'square';
-            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
-            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.1);
-            
-            oscillator.start();
-            oscillator.stop(audioCtx.currentTime + 0.1);
+            scanSound.currentTime = 0; // Memutar ulang dari awal jika sedang diputar
+            scanSound.play().catch(error => console.error("Audio play failed:", error));
         }
 
         // --- Core Functions ---
@@ -199,8 +192,8 @@
                             <p class="font-mono text-sm tracking-wide text-slate-800">${item.code}</p>
                             <p class="text-xs text-slate-400">${item.timestamp}</p>
                         </div>
-                        <button data-index="${index}" class="delete-btn text-red-500 hover:text-red-700 p-1 rounded-full">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2Zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8s8 3.59 8 8s-3.59 8-8 8Zm3.59-13L12 10.59L8.41 7L7 8.41L10.59 12L7 15.59L8.41 17L12 13.41L15.59 17L17 15.59L13.41 12L17 8.41L15.59 7Z"/></svg>
+                        <button data-index="${index}" class="delete-btn text-red-500 hover:text-red-700 p-1 rounded-full text-xl">
+                            <i class="fas fa-times-circle"></i>
                         </button>
                     `;
                     scannedList.prepend(listItem);
@@ -216,7 +209,7 @@
             try {
                 statusText.textContent = "Memulai kamera...";
                 await codeReader.decodeFromVideoDevice(deviceId, 'video', (result, err) => {
-                    if (result && modal.classList.contains('opacity-0')) { // Only process if modal is not open
+                    if (result && modal.classList.contains('opacity-0')) {
                         handleScanResult(result.getText());
                     }
                     if (err && !(err instanceof NotFoundException || err instanceof ChecksumException || err instanceof FormatException)) {
@@ -243,19 +236,25 @@
 
         function handleCameraError(err) {
             console.error('Camera Error:', err);
-            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                statusText.textContent = "Akses kamera ditolak. Mohon izinkan di pengaturan browser.";
-            } else {
-                statusText.textContent = "Gagal mengakses kamera.";
-            }
             isCameraOn = false;
             updateToggleButton();
+            toggleCameraBtn.disabled = true;
+            cameraSelect.disabled = true;
+
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                statusText.innerHTML = `
+                    <strong class="text-red-600">Akses Kamera Diblokir!</strong><br>
+                    <span class="text-xs">Ubah izin di pengaturan situs browser Anda, lalu muat ulang halaman ini.</span>
+                `;
+            } else {
+                statusText.textContent = "Gagal mengakses kamera. Pastikan tidak digunakan aplikasi lain.";
+            }
         }
         
         async function setupCameras() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                stream.getTracks().forEach(t => t.stop()); // Stop immediately, only needed for permission
+                stream.getTracks().forEach(t => t.stop());
                 
                 const videoInputDevices = await codeReader.listVideoInputDevices();
                 cameraSelect.innerHTML = '';
@@ -271,15 +270,16 @@
                     if (rearCamera) cameraSelect.value = rearCamera.deviceId;
 
                     cameraSelect.disabled = false;
+                    toggleCameraBtn.disabled = false;
                     return cameraSelect.value;
                 } else {
                     statusText.textContent = "Tidak ada kamera ditemukan.";
                     cameraSelect.disabled = true;
+                    toggleCameraBtn.disabled = true;
                     return null;
                 }
             } catch (err) {
                 handleCameraError(err);
-                cameraSelect.disabled = true;
                 return null;
             }
         }
@@ -330,7 +330,7 @@
                 stopScanner();
             } else {
                 let deviceId = cameraSelect.value;
-                if (!deviceId || cameraSelect.options.length === 1 && cameraSelect.options[0].textContent === "Pilih Kamera") {
+                if (!deviceId || cameraSelect.options.length <= 1) { // Check if list needs populating
                     deviceId = await setupCameras();
                 }
                 if (deviceId) {
@@ -391,7 +391,8 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             loadFromLocalStorage();
-            await setupCameras(); // Pre-populate camera list on load
+            // We setup cameras on button click now to ensure user interaction first
+            toggleCameraBtn.disabled = false;
         });
     })();
 </script>
