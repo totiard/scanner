@@ -43,6 +43,7 @@
 
     <!-- Elemen Audio untuk Suara Pindai -->
     <audio id="scan-sound" src="scan.mp3" preload="auto"></audio>
+    <audio id="scan-error-sound" src="scanx.mp3" preload="auto"></audio>
 
     <div class="w-full max-w-2xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col">
         <!-- Header -->
@@ -137,6 +138,7 @@
         const cameraSelect = document.getElementById('camera-select');
         const laser = document.getElementById('laser');
         const scanSound = document.getElementById('scan-sound');
+        const scanErrorSound = document.getElementById('scan-error-sound');
 
         // Modal elements
         const modal = document.getElementById('confirmation-modal');
@@ -158,10 +160,14 @@
             delayBetweenScanSuccess: 500
         });
 
-        // --- Audio Function ---
-        function playBeep() {
-            scanSound.currentTime = 0; // Memutar ulang dari awal jika sedang diputar
-            scanSound.play().catch(error => console.error("Audio play failed:", error));
+        // --- Audio Functions ---
+        function playSuccessSound() {
+            scanSound.currentTime = 0;
+            scanSound.play().catch(error => console.error("Success audio play failed:", error));
+        }
+        function playErrorSound() {
+            scanErrorSound.currentTime = 0;
+            scanErrorSound.play().catch(error => console.error("Error audio play failed:", error));
         }
 
         // --- Core Functions ---
@@ -297,11 +303,16 @@
         }
 
         function handleScanResult(code) {
-            playBeep();
             currentScannedCode = code;
-            modalScannedCode.textContent = code;
-            
             const isDuplicate = scannedCodes.some(item => item.code === code);
+
+            if (isDuplicate) {
+                playErrorSound();
+            } else {
+                playSuccessSound();
+            }
+            
+            modalScannedCode.textContent = code;
             modalDuplicateWarning.classList.toggle('hidden', !isDuplicate);
             modalAddBtn.disabled = isDuplicate;
             modalAddBtn.classList.toggle('disabled:bg-slate-300', isDuplicate);
