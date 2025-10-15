@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pemindai Barcode Ekspedisi (Code 128)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+        import {
+            BrowserMultiFormatReader,
+            NotFoundException,
+            ChecksumException,
+            FormatException
+        } from "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.0/esm5/index.min.js";
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .scanner-laser {
+            position: absolute;
+            background-color: #ef4444;
+            height: 2px;
+            width: 100%;
+            box-shadow: 0 0 4px #ef4444;
+            top: 50%;
+            animation: scanning 2s infinite ease-in-out;
+        }
+        @keyframes scanning {
+            0% { top: 0%; }
+            50% { top: calc(100% - 2px); }
+            100% { top: 0%; }
+        }
+        /* Custom scrollbar */
+        #scanned-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        #scanned-list::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        #scanned-list::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 6px;
+        }
+        #scanned-list::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 flex flex-col items-center justify-center min-h-screen p-4 md:p-6">
+
+    <div class="w-full max-w-2xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col">
+        <!-- Header -->
+        <header class="p-4 md:p-6 bg-slate-800 text-white text-center">
+            <h1 class="text-xl md:text-2xl font-bold">Pemindai Barcode Ekspedisi</h1>
+            <p class="text-sm text-slate-300 mt-1">Khusus untuk format Code 128</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="p-4 md:p-6 flex-grow">
+            <!-- Scanner View -->
+            <div id="scanner-container" class="w-full max-w-md mx-auto mb-4">
+                <div class="relative w-full aspect-video bg-slate-900 rounded-lg overflow-hidden shadow-inner">
+                    <video id="video" class="w-full h-full object-cover"></video>
+                    <div class="scanner-laser"></div>
+                    <div class="absolute inset-0 border-4 border-white/20 rounded-lg"></div>
+                </div>
+                <p id="status-text" class="text-center text-sm text-slate-500 mt-2">Arahkan kamera ke barcode...</p>
+            </div>
+            
+            <!-- Controls and Stats -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+                <div class="flex items-center gap-2 bg-sky-100 text-sky-800 px-4 py-2 rounded-lg font-semibold">
+                    <span>Total Kode:</span>
+                    <span id="scan-count" class="text-lg font-bold">0</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="copy-button" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow flex items-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        <span id="copy-button-text">Salin Semua</span>
+                    </button>
+                    <button id="clear-button" class="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors shadow flex items-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                        <span>Hapus</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scanned List -->
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <h2 class="text-md font-semibold mb-2">Hasil Pindaian</h2>
+                <div id="scanned-list-container" class="h-48 overflow-y-auto">
+                    <ul id="scanned-list" class="space-y-2">
+                         <li id="placeholder" class="text-center text-slate-500 p-4">Belum ada kode yang dipindai.</li>
+                    </ul>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Duplicate Alert Popup -->
+    <div id="duplicate-alert" class="fixed top-5 right-5 bg-yellow-500 text-white py-2 px-5 rounded-lg shadow-lg text-sm font-semibold transform translate-x-[150%] transition-transform duration-300 ease-in-out">
+        Kode sudah pernah dipindai!
+    </div>
+</body>
+
+<script type="module">
+    // Immediately-invoked function expression (IIFE) to encapsulate code
+    (function() {
+        // --- DOM Element References ---
+        const video = document.getElementById('video');
+        const scannedList = document.getElementById('scanned-list');
+        const scanCount = document.getElementById('scan-count');
+        const copyButton = document.getElementById('copy-button');
+        const clearButton = document.getElementById('clear-button');
+        const placeholder = document.getElementById('placeholder');
+        const duplicateAlert = document.getElementById('duplicate-alert');
+        const statusText = document.getElementById('status-text');
+        const copyButtonText = document.getElementById('copy-button-text');
+
+        // --- State Management ---
+        let scannedCodes = [];
+        const codeReader = new self.BrowserMultiFormatReader();
+        let selectedDeviceId;
+
+        // --- Core Functions ---
+
+        /**
+         * Loads scanned codes from Local Storage on startup.
+         */
+        function loadFromLocalStorage() {
+            const savedCodes = localStorage.getItem('expeditionScannedCodes');
+            if (savedCodes) {
+                scannedCodes = JSON.parse(savedCodes);
+                updateUI();
+            }
+        }
+
+        /**
+         * Saves the current list of scanned codes to Local Storage.
+         */
+        function saveToLocalStorage() {
+            localStorage.setItem('expeditionScannedCodes', JSON.stringify(scannedCodes));
+        }
+
+        /**
+         * Updates the entire UI based on the current state of scannedCodes array.
+         */
+        function updateUI() {
+            // Clear the current list
+            scannedList.innerHTML = '';
+            
+            // Update placeholder visibility
+            if (scannedCodes.length === 0) {
+                scannedList.appendChild(placeholder);
+                placeholder.style.display = 'list-item';
+            } else {
+                placeholder.style.display = 'none';
+                // Populate the list with scanned codes
+                scannedCodes.forEach(code => {
+                    const listItem = document.createElement('li');
+                    listItem.className = 'bg-white p-2.5 rounded-md shadow-sm border border-slate-200 text-slate-700 font-mono text-sm tracking-wide';
+                    listItem.textContent = code;
+                    scannedList.prepend(listItem); // Add new items to the top
+                });
+            }
+
+            // Update scan count
+            scanCount.textContent = scannedCodes.length;
+
+            // Update button states
+            const hasCodes = scannedCodes.length > 0;
+            copyButton.disabled = !hasCodes;
+            clearButton.disabled = !hasCodes;
+        }
+
+        /**
+         * Shows a temporary popup alert.
+         * @param {string} message - The message to display.
+         * @param {string} type - 'duplicate' or 'success'.
+         */
+        function showPopup(message, type = 'duplicate') {
+            const alertElement = duplicateAlert;
+            alertElement.textContent = message;
+
+            if (type === 'duplicate') {
+                alertElement.classList.remove('bg-green-500');
+                alertElement.classList.add('bg-yellow-500');
+            } else { // success
+                alertElement.classList.remove('bg-yellow-500');
+                alertElement.classList.add('bg-green-500');
+            }
+
+            alertElement.classList.remove('translate-x-[150%]');
+            setTimeout(() => {
+                alertElement.classList.add('translate-x-[150%]');
+            }, 2000); // Popup stays for 2 seconds
+        }
+
+        /**
+         * Starts the video stream and barcode decoding.
+         */
+        function startScanner() {
+            codeReader.listVideoInputDevices()
+                .then((videoInputDevices) => {
+                    // Prefer the rear camera
+                    const rearCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('belakang'));
+                    selectedDeviceId = rearCamera ? rearCamera.deviceId : videoInputDevices[0].deviceId;
+                    
+                    statusText.textContent = "Memulai kamera...";
+                    
+                    codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+                        if (result) {
+                            handleScanResult(result.getText());
+                        }
+                        if (err && !(err instanceof self.NotFoundException || err instanceof self.ChecksumException || err instanceof self.FormatException)) {
+                            console.error(err);
+                            statusText.textContent = `Error: ${err.message}`;
+                        }
+                    });
+
+                    statusText.textContent = "Arahkan kamera ke barcode...";
+                })
+                .catch((err) => {
+                    console.error(err);
+                    statusText.textContent = "Tidak dapat mengakses kamera. Mohon izinkan akses.";
+                });
+        }
+        
+        /**
+         * Processes the result from a barcode scan.
+         * @param {string} code - The scanned barcode text.
+         */
+        function handleScanResult(code) {
+             if (scannedCodes.includes(code)) {
+                showPopup('Kode sudah pernah dipindai!', 'duplicate');
+            } else {
+                scannedCodes.push(code);
+                saveToLocalStorage();
+                updateUI();
+                // Vibrate for feedback on supported devices
+                if ('vibrate' in navigator) {
+                    navigator.vibrate(100);
+                }
+            }
+        }
+
+        // --- Event Listeners ---
+
+        /**
+         * Handles the "Copy All" button click.
+         */
+        copyButton.addEventListener('click', () => {
+            if (scannedCodes.length > 0) {
+                const textToCopy = scannedCodes.join('\n');
+                
+                // Use a temporary textarea to copy for better compatibility
+                const textArea = document.createElement('textarea');
+                textArea.value = textToCopy;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    copyButtonText.textContent = 'Disalin!';
+                    setTimeout(() => {
+                        copyButtonText.textContent = 'Salin Semua';
+                    }, 2000);
+                } catch (err) {
+                    console.error('Gagal menyalin:', err);
+                    showPopup('Gagal menyalin!', 'duplicate');
+                }
+                document.body.removeChild(textArea);
+            }
+        });
+        
+        /**
+         * Handles the "Clear All" button click.
+         */
+        clearButton.addEventListener('click', () => {
+            if (confirm('Apakah Anda yakin ingin menghapus semua kode yang telah dipindai?')) {
+                scannedCodes = [];
+                saveToLocalStorage();
+                updateUI();
+            }
+        });
+        
+        /**
+         * Initializes the application when the DOM is fully loaded.
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFromLocalStorage();
+            startScanner();
+        });
+
+    })(); // End of IIFE
+</script>
+
+</html>
