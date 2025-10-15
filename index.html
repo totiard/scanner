@@ -121,7 +121,7 @@
 
         // --- State Management ---
         let scannedCodes = [];
-        const codeReader = new self.BrowserMultiFormatReader();
+        const codeReader = new BrowserMultiFormatReader();
         let selectedDeviceId;
 
         // --- Core Functions ---
@@ -214,7 +214,7 @@
                         if (result) {
                             handleScanResult(result.getText());
                         }
-                        if (err && !(err instanceof self.NotFoundException || err instanceof self.ChecksumException || err instanceof self.FormatException)) {
+                        if (err && !(err instanceof NotFoundException || err instanceof ChecksumException || err instanceof FormatException)) {
                             console.error(err);
                             statusText.textContent = `Error: ${err.message}`;
                         }
@@ -297,3 +297,4 @@
 </script>
 
 </html>
+
