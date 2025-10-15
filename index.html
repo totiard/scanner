@@ -198,37 +198,57 @@
         }
 
         /**
-         * Starts the video stream and barcode decoding.
+         * Starts the video stream and barcode decoding. This version first requests
+         * permissions to ensure device labels are populated.
          */
-        function startScanner() {
-            codeReader.listVideoInputDevices()
-                .then((videoInputDevices) => {
-                    if (videoInputDevices.length === 0) {
-                        statusText.textContent = "Tidak ada kamera ditemukan.";
-                        return;
-                    }
-                    // Prefer the rear camera
-                    const rearCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('belakang'));
-                    selectedDeviceId = rearCamera ? rearCamera.deviceId : videoInputDevices[0].deviceId;
-                    
-                    statusText.textContent = "Memulai kamera...";
-                    
-                    codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
-                        if (result) {
-                            handleScanResult(result.getText());
-                        }
-                        if (err && !(err instanceof NotFoundException || err instanceof ChecksumException || err instanceof FormatException)) {
-                            console.error(err);
-                            statusText.textContent = `Error: ${err.message}`;
-                        }
-                    });
+        async function startScanner() {
+            try {
+                // 1) Request a temporary stream to prompt permission (default camera)
+                let stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                // Stop tracks immediately (we only requested to get permission & labels)
+                stream.getTracks().forEach(t => t.stop());
 
-                    statusText.textContent = "Arahkan kamera ke barcode...";
-                })
-                .catch((err) => {
-                    console.error(err);
-                    statusText.textContent = "Tidak dapat mengakses kamera. Mohon izinkan akses.";
+                // 2) Now list devices (labels should be available)
+                const videoInputDevices = await codeReader.listVideoInputDevices();
+
+                if (!videoInputDevices || videoInputDevices.length === 0) {
+                    statusText.textContent = "Tidak ada kamera ditemukan.";
+                    return;
+                }
+
+                // Prefer rear camera by checking label, fallback to the first device
+                const rearCamera = videoInputDevices.find(device =>
+                    device.label && (device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('belakang') || device.label.toLowerCase().includes('rear'))
+                );
+                selectedDeviceId = rearCamera ? rearCamera.deviceId : videoInputDevices[0].deviceId;
+
+                statusText.textContent = "Memulai kamera...";
+
+                // 3) Start ZXing decoding from the chosen device
+                codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+                    if (result) {
+                        handleScanResult(result.getText());
+                    }
+                    if (err && !(err instanceof NotFoundException || err instanceof ChecksumException || err instanceof FormatException)) {
+                        console.error(err);
+                        statusText.textContent = `Error: ${err.message}`;
+                    }
                 });
+
+                statusText.textContent = "Arahkan kamera ke barcode...";
+            } catch (err) {
+                console.error('startScanner error:', err);
+                // Display more informative messages based on the error type
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    statusText.textContent = "Akses kamera ditolak. Mohon izinkan akses kamera di browser.";
+                } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                    statusText.textContent = "Tidak ada kamera yang tersedia.";
+                } else if (err.name === 'OverconstrainedError') {
+                    statusText.textContent = "Tidak menemukan kamera yang cocok.";
+                } else {
+                    statusText.textContent = "Tidak dapat mengakses kamera. Mohon izinkan akses atau cek perangkat.";
+                }
+            }
         }
         
         /**
