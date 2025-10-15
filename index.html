@@ -5,14 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pemindai Barcode Ekspedisi (Code 128)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="module">
-        import {
-            BrowserMultiFormatReader,
-            NotFoundException,
-            ChecksumException,
-            FormatException
-        } from "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.0/esm5/index.min.js";
-    </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         body {
@@ -106,6 +98,13 @@
 </body>
 
 <script type="module">
+    import {
+        BrowserMultiFormatReader,
+        NotFoundException,
+        ChecksumException,
+        FormatException
+    } from "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.0/esm5/index.min.js";
+
     // Immediately-invoked function expression (IIFE) to encapsulate code
     (function() {
         // --- DOM Element References ---
@@ -204,6 +203,10 @@
         function startScanner() {
             codeReader.listVideoInputDevices()
                 .then((videoInputDevices) => {
+                    if (videoInputDevices.length === 0) {
+                        statusText.textContent = "Tidak ada kamera ditemukan.";
+                        return;
+                    }
                     // Prefer the rear camera
                     const rearCamera = videoInputDevices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('belakang'));
                     selectedDeviceId = rearCamera ? rearCamera.deviceId : videoInputDevices[0].deviceId;
